@@ -1,36 +1,58 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
-
-# Controls when the workflow will run
+name: IRCTC Automation Booking
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
   push:
-    branches: [ "main" ]
+    branches:
+      - 'main'
   pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+    inputs:
+      USERNAME:
+        required: true
+        type: string
+        description: "Your IRCTC Username"
+      PASSWORD:
+        required: true
+        type: string
+        description: "Your IRCTC Password"
+      UPI_ID:
+        required: true
+        type: string
+        description: "Your UPI ID To Make Payment From"
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+  IRCTC-Booking:
+    runs-on: ubuntu-22.04
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip' # caching pip dependencies
+    - run: |
+        sudo timedatectl set-timezone Asia/Kolkata
+        pip install -r irctc-captcha-solver/requirements.txt
+        python3 irctc-captcha-solver/app.py "" # python3 irctc-captcha-solver/app.py "" is used for models to load before starting tatkal tickets 
+        PASSWORD=$(jq -r '.inputs.PASSWORD' $GITHUB_EVENT_PATH)
+        USERNAME=$(jq -r '.inputs.USERNAME' $GITHUB_EVENT_PATH)
+        UPI_ID=$(jq -r '.inputs.UPI_ID' $GITHUB_EVENT_PATH)
+        echo ::add-mask::$PASSWORD
+        echo ::add-mask::$USERNAME
+        echo ::add-mask::$UPI_ID
+        echo PASSWORD=$PASSWORD >> $GITHUB_ENV
+        echo USERNAME=$USERNAME >> $GITHUB_ENV
+        echo UPI_ID=$UPI_ID >> $GITHUB_ENV
+    # python3 irctc-captcha-solver/app.py "" is used for models to load before starting tatkal tickets 
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+    - name: Install Node.js and npm
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.12.2'
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+    - name: Installing Cypress & Running IRCTC Cypress Automation
+      run: |
+        npm install cypress
+        npx cypress run --browser chrome --headed --record --key a15b31a6-b9ee-4678-b9ac-f45a190851fe --env UPI_ID=${{ inputs.UPI_ID || '' }},USERNAME=${{ inputs.USERNAME || secrets.USERNAME }},PASSWORD=${{ inputs.PASSWORD || secrets.PASSWORD }}
+    # - name: Running IRCTC Cypress Script
+    #   uses: cypress-io/github-action@v6
+    #   with:
+    #     command: npx cypress run --record --key a15b31a6-b9ee-4678-b9ac-f45a190851fe --env UPI_ID=${{ inputs.UPI_ID || '' }},USERNAME=${{ inputs.USERNAME || secrets.USERNAME }},PASSWORD=${{ inputs.PASSWORD || secrets.PASSWORD }}
